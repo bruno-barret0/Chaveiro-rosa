@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Carrossel de Avaliações: step 3 (3 avaliações por vez no desktop), com autoplay (25s), sem dots, com botões específicos
     setupCarousel('reviews-slide-wrapper', null, 'review-prev', 'review-next', 3, true, 25000);
+
+    // Chamar a função de visibilidade do vídeo ao carregar a página
+    checkVideoVisibility();
 });
 
 // --- Comportamento Dinâmico do Cabeçalho (Esconder/Mostrar ao Rolar) ---
@@ -41,7 +44,6 @@ window.addEventListener('scroll', () => {
 
 // --- Função Reutilizável para Carrosséis (Imagens e Avaliações) ---
 
-// Adicionado o parâmetro 'step' para definir quantos itens pular (1 para imagens, 3 para avaliações desktop)
 function setupCarousel(wrapperId, dotsId, prevBtnClass, nextBtnClass, step, autoPlay, intervalTime) {
     const wrapper = document.getElementById(wrapperId);
     const items = wrapper.children;
@@ -49,33 +51,25 @@ function setupCarousel(wrapperId, dotsId, prevBtnClass, nextBtnClass, step, auto
     let currentIndex = 0;
     let autoPlayInterval;
 
-    // Botões manuais podem não existir para autoplay-only carousels, por isso a verificação
     const prevBtn = document.querySelector(`.${prevBtnClass}`);
     const nextBtn = document.querySelector(`.${nextBtnClass}`);
 
     function updateCarouselPosition() {
-        // Lógica de visualização: se for mobile (para reviews) ou se for o carrossel de imagens, o passo é 1. Senão, usa o 'step' definido (3).
         const currentStep = (window.innerWidth <= 768 && wrapperId === 'reviews-slide-wrapper') ? 1 : step;
                              
-        // Garante que o índice fique no loop, avançando no máximo para o último slide possível (considerando o step)
         if (currentIndex >= totalItems) currentIndex = 0;
         if (currentIndex < 0) {
-             // Quando volta, pula para o início do último grupo de 3 (ou 1 no mobile)
              currentIndex = Math.floor((totalItems - 1) / currentStep) * currentStep;
         }
 
-        // Calcula a posição de translação. Move pela porcentagem correta baseada no passo
-        // A lógica de porcentagem complexa foi simplificada para funcionar com a largura CSS calc()
         const percentageMove = (currentIndex / totalItems) * 100;
         
         wrapper.style.transform = `translateX(-${percentageMove}%)`;
 
-        // Lógica para os dots (apenas no carrossel de imagens)
         if (dotsId) {
             const dotsContainer = document.getElementById(dotsId);
             const dots = dotsContainer.querySelectorAll('.dot');
             dots.forEach(dot => dot.classList.remove('active'));
-            // O dot ativo é sempre o que está no currentIndex (início do grupo)
             if (dots[currentIndex]) {
                 dots[currentIndex].classList.add('active');
             }
@@ -83,42 +77,32 @@ function setupCarousel(wrapperId, dotsId, prevBtnClass, nextBtnClass, step, auto
     }
 
     function navigate(direction) {
-        // Limpa o autoplay ao clicar manualmente para evitar conflito imediato
         if (autoPlayInterval) clearInterval(autoPlayInterval); 
         
-        // Navega de acordo com o step (1 ou 3 itens por vez)
         const currentStep = (window.innerWidth <= 768 && wrapperId === 'reviews-slide-wrapper') ? 1 : step;
         currentIndex += direction * currentStep;
         
         updateCarouselPosition();
 
-        // Reinicia o autoplay após a navegação manual
         if (autoPlay) {
              autoPlayInterval = setInterval(() => navigate(1), intervalTime);
         }
     }
 
-    // Adiciona eventos de clique manual
     if (prevBtn) prevBtn.addEventListener('click', () => navigate(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => navigate(1));
 
-    // Configuração inicial e autoplay
     if (autoPlay) {
-        // Autoplay sempre move no sentido positivo (next)
         autoPlayInterval = setInterval(() => navigate(1), intervalTime);
     }
 
-    // Listener de resize para ajustar a visualização mobile/desktop
     window.addEventListener('resize', () => {
-        // Reseta a posição no resize para evitar visuais quebrados
         currentIndex = 0;
         updateCarouselPosition();
     });
 
-    // Criação dos dots (apenas para o carrossel de imagens)
     if (dotsId) {
         const dotsContainer = document.getElementById(dotsId);
-        // Dots são criados para cada item individualmente
         for (let i = 0; i < totalItems; i++) {
             const dot = document.createElement('span');
             dot.classList.add('dot');
@@ -129,8 +113,32 @@ function setupCarousel(wrapperId, dotsId, prevBtnClass, nextBtnClass, step, auto
             dotsContainer.appendChild(dot);
         }
     }
-
-    // Mostrar a posição inicial
     updateCarouselPosition();
 }
 
+// --- NOVIDADE: Pausar vídeo quando fora da visualização ---
+window.addEventListener('scroll', checkVideoVisibility);
+window.addEventListener('resize', checkVideoVisibility);
+
+function checkVideoVisibility() {
+    const video = document.querySelector('.header-video');
+    
+    if (!video) return;
+
+    const videoRect = video.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const visibleThreshold = videoRect.height * 0.7;
+
+    const isVisible = (
+        videoRect.top < viewportHeight - visibleThreshold &&
+        videoRect.bottom > visibleThreshold
+    );
+    
+    if (isVisible) {
+        if (video.paused) {
+           video.play().catch(e => console.error("Autoplay impedido:", e)); 
+        }
+    } else {
+        video.pause();
+    }
+}
